@@ -1,4 +1,4 @@
 duckdb>=1.1
 pyarrow>=14
-zstandard>=0.22
+zstandard>=0.22; python_version < "3.14"
 numpy>=1.24

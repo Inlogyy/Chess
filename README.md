@@ -18,7 +18,8 @@ CPU cores with flat memory use, removes the games that don't fit, and writes:
 
 1. **Install Python 3.13** from <https://www.python.org/downloads/windows/>.
    On the first installer screen tick **"Add python.exe to PATH"**.
-   (3.11 and 3.12 also work. Avoid brand-new versions such as 3.15: some packages lag behind.)
+   (3.11 and 3.12 also work. Newer versions such as 3.15 are tried too, but if setup fails,
+   install 3.13 next to it: several Python versions can live on one PC.)
 2. **Download this repository**: on its GitHub page click **Code → Download ZIP**, then
    unzip it somewhere, e.g. `Documents\Chess`. (Or `git clone` it.)
 3. **Double-click `RUN_TILT.bat`** and type `selftest`.
