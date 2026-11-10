@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+selftest_output/
+tilt_output/
+.last_output
+*.pgn
+*.pgn.zst
+*.pgn.bz2
+*.pgn.gz

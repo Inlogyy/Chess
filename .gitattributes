@@ -1,0 +1,3 @@
+* text=auto eol=lf
+# Stored with Windows line endings as-is, so it works from "Download ZIP" too.
+*.bat -text
