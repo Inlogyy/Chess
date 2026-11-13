@@ -40,7 +40,11 @@ def open_pgn(path: Path):
     raw = open(path, "rb")
     magic = raw.read(4)
     raw.seek(0)
-    if magic == b"\x28\xb5\x2f\xfd":  # zstd
+    # zstd frame, or a zstd "skippable" frame (0x184D2A50-5F) that some tools
+    # (pzstd, seekable format) put first; also trust a .zst extension.
+    is_zstd = (magic == b"\x28\xb5\x2f\xfd" or (len(magic) == 4 and magic[1:] == b"\x2a\x4d\x18"
+               and 0x50 <= magic[0] <= 0x5F) or Path(path).name.lower().endswith(".zst"))
+    if is_zstd:
         try:
             import zstandard
         except ImportError:
@@ -165,6 +169,7 @@ def _feed(path, task_q, result_q, procs, chunk_mb, limit, log):
     size = chunk_mb << 20
     pending = b""
     games = 0
+    unpacked = 0
     truncated = False
     t0 = last = time.time()
     try:
@@ -178,6 +183,7 @@ def _feed(path, task_q, result_q, procs, chunk_mb, limit, log):
                 data = b""
             if not data:
                 break
+            unpacked += len(data)
             buf = pending + data if pending else data
             cut = buf.rfind(b"\n\n[")
             if cut < 0:
@@ -199,12 +205,18 @@ def _feed(path, task_q, result_q, procs, chunk_mb, limit, log):
                 done = raw.tell() / total
                 rate = games / (now - t0)
                 eta = (now - t0) * (1 - done) / done if done > 0.001 else 0
-                log(f"  {done:6.1%} of file | {games:,} games | {rate:,.0f} games/s | about {_fmt_dur(eta)} left")
+                log(f"  {done:6.1%} of file | {unpacked / 1e9:,.1f} GB unpacked | {games:,} games | "
+                    f"{rate:,.0f} games/s | about {_fmt_dur(eta)} left")
         if pending.strip():
             _put(task_q, pending, procs, result_q)
             games += pending.count(b"\n[Result ")
     finally:
         raw.close()
+    log(f"  unpacked {unpacked / 1e9:,.2f} GB from a {total / 1e9:,.2f} GB file")
+    if total > 1e9 and unpacked < 2 * total:
+        log("  WARNING: that is far less than expected (Lichess files unpack to about 7x their size).")
+        log("           The file may be incomplete or damaged (e.g. a torrent still pre-allocated),")
+        log("           or not a normal .zst. Try: tilt.py inspect FILE, or test it with 7-Zip.")
     return games, truncated, time.time() - t0
 
 
@@ -279,6 +291,9 @@ def extract_file(path: Path, games_dir: Path, workers: int, chunk_mb: int, limit
     read = stats.get("games_read", 0)
     log(f"{path.name}: {read:,} games read, {stats.get('games_kept', 0):,} kept, "
         f"in {_fmt_dur(elapsed)} ({read / elapsed:,.0f} games/s)")
+    skipped = {k: v for k, v in stats.items() if k.startswith(("skip", "orphan", "eval_mis")) and v}
+    if skipped:
+        log("  removed/ignored: " + ", ".join(f"{k} {v:,}" for k, v in sorted(skipped.items(), key=lambda kv: -kv[1])))
     return info
 
 
@@ -314,6 +329,11 @@ def inspect_file(path: Path, n_games: int = 3000, log=print) -> None:
             break
         buf += data
     raw.close()
+    log(f"Unpacked {len(buf) / 1e6:,.1f} MB for this check. The file starts with:")
+    for line in buf[:700].decode("utf-8", "replace").splitlines()[:14]:
+        log("  | " + line.encode("ascii", "replace").decode()[:110])
+    if b"\r\n" in buf[:100000]:
+        log("  (the file uses Windows line endings)")
     cut = buf.rfind(b"\n\n[")
     if cut > 0:
         buf = buf[: cut + 1]

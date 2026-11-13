@@ -173,6 +173,35 @@ def test_eval_features_simple():
     assert f[0] == 2 and f[1] == 2 and f[2] > 99 and f[3] > 99 and f[6] == 0 and f[7] == 0
 
 
+def test_zst_with_skippable_frame(tmp_path=None):
+    """Lichess-style .zst files can start with a skippable frame; they must still be decoded."""
+    import struct
+    import tempfile
+    from pathlib import Path
+
+    import zstandard
+
+    from chesstilt.extract import open_pgn
+    data = (LICHESS_EVAL_GAME + BERSERK_GAME) * 50
+    comp = zstandard.ZstdCompressor()
+    blob = b""
+    for i in range(0, len(data), 20000):
+        f = comp.compress(data[i:i + 20000])
+        blob += struct.pack("<III", 0x184D2A50, 4, len(f)) + f
+    d = Path(tmp_path or tempfile.mkdtemp())
+    p = d / "x.pgn.zst"
+    p.write_bytes(blob)
+    raw, stream = open_pgn(p)
+    out = b""
+    while True:
+        chunk = stream.read(1 << 16)
+        if not chunk:
+            break
+        out += chunk
+    raw.close()
+    assert out == data
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):
