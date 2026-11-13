@@ -323,7 +323,8 @@ def inspect_file(path: Path, n_games: int = 3000, log=print) -> None:
     from .pgnparse import COLUMN_NAMES, KIND_NAMES, TERM_NAMES
     raw, stream = open_pgn(Path(path))
     buf = b""
-    while buf.count(b"\n[Result ") < n_games:
+    log(f"Reading the start of {Path(path).name} ...")
+    while buf.count(b"\n[Result ") < n_games and len(buf) < (64 << 20):
         data = stream.read(4 << 20)
         if not data:
             break
